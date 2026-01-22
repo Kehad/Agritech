@@ -1,4 +1,4 @@
-style={{ fill: 'red' }}import { MaterialIcons } from "@expo/vector-icons";
+import { MaterialIcons } from "@expo/vector-icons";
 import { COLORS, hp, wp } from "components/utils";
 import { StatusBar } from "expo-status-bar";
 import React, { useState } from "react";

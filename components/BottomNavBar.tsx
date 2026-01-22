@@ -3,11 +3,20 @@ import React from "react";
 import { StyleSheet, TouchableOpacity, View } from "react-native";
 import { COLORS } from "./utils";
 
+export type TabType = 'dashboard' | 'analytics' | 'chat' | 'profile';
+
 interface BottomNavBarProps {
+    activeTab: TabType;
+    onTabPress: (tab: TabType) => void;
     onFabPress: () => void;
 }
 
-export const BottomNavBar = ({ onFabPress }: BottomNavBarProps) => {
+export const BottomNavBar = ({ activeTab, onTabPress, onFabPress }: BottomNavBarProps) => {
+
+    const getIconColor = (tab: TabType) => {
+        return activeTab === tab ? COLORS.primary : "#BDBDBD";
+    };
+
     return (
         <>
             <TouchableOpacity
@@ -18,11 +27,23 @@ export const BottomNavBar = ({ onFabPress }: BottomNavBarProps) => {
             </TouchableOpacity>
 
             <View style={styles.bottomBar}>
-                <MaterialIcons name="dashboard" size={28} color={COLORS.primary} />
-                <MaterialIcons name="analytics" size={28} color="#BDBDBD" />
+                <TouchableOpacity onPress={() => onTabPress('dashboard')} style={styles.tabItem}>
+                    <MaterialIcons name="dashboard" size={28} color={getIconColor('dashboard')} />
+                </TouchableOpacity>
+
+                <TouchableOpacity onPress={() => onTabPress('analytics')} style={styles.tabItem}>
+                    <MaterialIcons name="analytics" size={28} color={getIconColor('analytics')} />
+                </TouchableOpacity>
+
                 <View style={{ width: 40 }} />
-                <MaterialIcons name="chat" size={28} color="#BDBDBD" />
-                <MaterialIcons name="person" size={28} color="#BDBDBD" />
+
+                <TouchableOpacity onPress={() => onTabPress('chat')} style={styles.tabItem}>
+                    <MaterialIcons name="chat" size={28} color={getIconColor('chat')} />
+                </TouchableOpacity>
+
+                <TouchableOpacity onPress={() => onTabPress('profile')} style={styles.tabItem}>
+                    <MaterialIcons name="person" size={28} color={getIconColor('profile')} />
+                </TouchableOpacity>
             </View>
         </>
     );
@@ -42,6 +63,9 @@ const styles = StyleSheet.create({
         borderTopWidth: 1,
         borderTopColor: '#E0E0E0',
         paddingBottom: 10,
+    },
+    tabItem: {
+        padding: 10,
     },
     fab: {
         position: 'absolute',
