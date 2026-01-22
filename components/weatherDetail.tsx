@@ -363,4 +363,52 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginRight: 4,
   },
+  // Bottom Sheet
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'flex-end',
+  },
+  bottomSheetContainer: {
+    backgroundColor: COLORS.surface,
+    borderTopLeftRadius: wp(4),
+    borderTopRightRadius: wp(4),
+    padding: wp(4),
+    paddingBottom: hp(5),
+  },
+  bottomSheetHandle: {
+    width: wp(12),
+    height: 4,
+    backgroundColor: '#E0E0E0',
+    borderRadius: 2,
+    alignSelf: 'center',
+    marginBottom: hp(2),
+  },
+  bottomSheetTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: hp(2),
+    textAlign: 'center',
+  },
+  actionTile: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: wp(3),
+    marginBottom: hp(2),
+    borderRadius: wp(2),
+    borderWidth: 1,
+  },
+  actionIconBox: {
+    padding: wp(2),
+    borderRadius: wp(2),
+  },
+  actionTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: COLORS.textPrimary,
+  },
+  actionSubtitle: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
+  },
 });

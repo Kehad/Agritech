@@ -6,6 +6,9 @@ import { Alert, StyleSheet, Text, View, RefreshControl, Platform } from "react-n
 import { ScrollView } from "react-native-gesture-handler";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
+import { useNavigation } from "@react-navigation/native";
+import { StackNavigationProp } from "@react-navigation/stack";
+import { DashboardStackParamList } from "../../navigation/DashboardNavigator";
 
 interface FarmDataItem {
     id: number;
@@ -20,9 +23,11 @@ interface FarmDataItem {
     toggleValue?: boolean;
     hasBadge?: boolean;
     badgeCount?: number;
+    screen?: keyof DashboardStackParamList;
 }
 
 export default function DashboardScreen(): JSX.Element {
+    const navigation = useNavigation<StackNavigationProp<DashboardStackParamList>>();
     const [refreshing, setRefreshing] = useState<boolean>(false);
     const [lastSyncTime, setLastSyncTime] = useState<Date>(new Date());
 
@@ -36,6 +41,7 @@ export default function DashboardScreen(): JSX.Element {
             subtitle: "Maize - Flowering Stage",
             details: "Growth stage: 65% complete",
             actionLabel: "View Details",
+            screen: "ActiveCrops",
         },
         {
             id: 2,
@@ -48,6 +54,7 @@ export default function DashboardScreen(): JSX.Element {
             actionLabel: "Control",
             hasToggle: true,
             toggleValue: true,
+            screen: "Irrigation",
         },
         {
             id: 3,
@@ -58,8 +65,7 @@ export default function DashboardScreen(): JSX.Element {
             subtitle: "3 High Priority",
             details: "Fertilizer application due today",
             actionLabel: "View Tasks",
-            hasBadge: true,
-            badgeCount: 3,
+            screen: "Tasks",
         },
         {
             id: 4,
@@ -70,6 +76,7 @@ export default function DashboardScreen(): JSX.Element {
             subtitle: "Pest Control Advisory",
             details: "Apply neem oil spray this week",
             actionLabel: "View All",
+            screen: "AIRecommendations",
         },
     ]);
 
@@ -106,6 +113,14 @@ export default function DashboardScreen(): JSX.Element {
         );
     };
 
+    const handleItemPress = (item: FarmDataItem) => {
+        if (item.screen) {
+            navigation.navigate(item.screen as any);
+        } else {
+            console.log(`Tapped ${item.title}`);
+        }
+    };
+
     return (
         <SafeAreaView style={styles.container}>
             <StatusBar backgroundColor={COLORS.primary} />
@@ -136,9 +151,10 @@ export default function DashboardScreen(): JSX.Element {
                     <FarmSummaryCardWidget
                         key={item.id}
                         data={item}
-                        onTap={() => console.log(`Tapped ${item.title}`)}
+                        onTap={() => handleItemPress(item)}
                         onLongPress={() => handleLongPress(item)}
                         onToggleChanged={item.hasToggle ? (val: boolean) => toggleSwitch(item.id, val) : null}
+                        navigateTo={item.screen}
                     />
                 ))}
 

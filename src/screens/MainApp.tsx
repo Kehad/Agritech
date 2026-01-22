@@ -1,20 +1,14 @@
 import { COLORS, hp, wp } from "components/utils";
 import { QuickActionMenuWidget } from "components/weatherDetail";
-import { BottomNavBar, TabType } from "components/BottomNavBar";
-import ProfileNavigator from "../navigation/ProfileNavigator";
-import AnalyticsScreen from "./Analytics/AnalyticsScreen";
-import ChatScreen from "./Chat/ChatScreen";
-import DashboardScreen from "./Dashboard/DashboardScreen";
+import TabNavigator from "../navigation/TabNavigator";
 import { StatusBar } from "expo-status-bar";
 import React, { JSX, useState } from "react";
-import { Modal, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { Modal, StyleSheet, TouchableOpacity, View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
-import { SafeAreaView } from "react-native-safe-area-context";
 
 // --- MAIN SCREEN ---
 export default function FarmDashboardInitialPage(): JSX.Element {
   const [modalVisible, setModalVisible] = useState<boolean>(false);
-  const [activeTab, setActiveTab] = useState<TabType>('dashboard');
 
   return (
     <GestureHandlerRootView style={{ flex: 1, width: '100%' }}>
@@ -22,28 +16,8 @@ export default function FarmDashboardInitialPage(): JSX.Element {
       <View style={styles.container}>
         <StatusBar backgroundColor={COLORS.primary} />
 
-        {/* Main Content Area */}
-        {activeTab === 'dashboard' ? (
-          <DashboardScreen />
-        ) : activeTab === 'analytics' ? (
-          <AnalyticsScreen />
-        ) : activeTab === 'chat' ? (
-          <ChatScreen />
-        ) : activeTab === 'profile' ? (
-          <ProfileNavigator />
-        ) : (
-          <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-            <Text style={{ color: COLORS.textSecondary }}>Feature coming soon</Text>
-          </View>
-        )}
-
-
-        {/* Floating Action Button (Alternative to Quick Menu logic for demo) or Menu Trigger */}
-        <BottomNavBar
-          activeTab={activeTab}
-          onTabPress={setActiveTab}
-          onFabPress={() => setModalVisible(true)}
-        />
+        {/* Tab Navigator handles the main content and bottom bar */}
+        <TabNavigator onFabPress={() => setModalVisible(true)} />
 
         {/* Quick Actions Modal */}
         <Modal

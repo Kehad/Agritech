@@ -3,8 +3,12 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, TextInput,
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { COLORS, hp, wp } from 'components/utils';
+import { useNavigation } from '@react-navigation/native';
+import { StackNavigationProp } from '@react-navigation/stack';
+import { ChatStackParamList } from '../../navigation/ChatNavigator';
 
 const ChatScreen = () => {
+    const navigation = useNavigation<StackNavigationProp<ChatStackParamList>>();
 
     const users = [
         { id: '1', name: 'Dr. Akeem', role: 'Ext. Officer', image: 'https://i.pravatar.cc/100?img=11', active: true },
@@ -56,6 +60,15 @@ const ChatScreen = () => {
         }
     ];
 
+    const handleChatPress = (item: any) => {
+        navigation.navigate('ChatDetail', {
+            id: item.id,
+            name: item.name,
+            image: item.image,
+            active: true // Or derive from users list if possible
+        });
+    };
+
     const renderHeader = () => (
         <View style={styles.header}>
             <Text style={styles.headerTitle}>Community</Text>
@@ -81,7 +94,16 @@ const ChatScreen = () => {
             <Text style={styles.sectionTitle}>Active Experts</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: wp(4) }}>
                 {users.map(user => (
-                    <TouchableOpacity key={user.id} style={styles.userItem}>
+                    <TouchableOpacity
+                        key={user.id}
+                        style={styles.userItem}
+                        onPress={() => navigation.navigate('ChatDetail', {
+                            id: user.id,
+                            name: user.name,
+                            image: user.image,
+                            active: user.active
+                        })}
+                    >
                         <View>
                             <Image source={{ uri: user.image }} style={styles.avatarLarge} />
                             {user.active && <View style={styles.activeBadge} />}
@@ -94,7 +116,7 @@ const ChatScreen = () => {
     );
 
     const renderMessageItem = ({ item }: any) => (
-        <TouchableOpacity style={styles.messageItem}>
+        <TouchableOpacity style={styles.messageItem} onPress={() => handleChatPress(item)}>
             <Image source={{ uri: item.image }} style={styles.avatar} />
             <View style={styles.messageContent}>
                 <View style={styles.messageHeader}>
