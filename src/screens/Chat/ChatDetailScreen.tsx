@@ -1,14 +1,16 @@
 import React, { useState, useRef, useEffect } from 'react';
 import {
     View, Text, StyleSheet, TextInput, TouchableOpacity,
-    FlatList, KeyboardAvoidingView, Platform, Image, LayoutAnimation, UIManager, Alert
+    FlatList, KeyboardAvoidingView, Platform, Image, LayoutAnimation, UIManager, Alert, Modal
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { MaterialIcons, Ionicons, FontAwesome5 } from '@expo/vector-icons';
+import { MaterialIcons, Ionicons, MaterialCommunityIcons, FontAwesome } from '@expo/vector-icons';
 import { COLORS, hp, wp } from 'components/utils';
 import { useRoute, useNavigation, RouteProp } from '@react-navigation/native';
 import { ChatStackParamList } from '../../navigation/ChatNavigator';
 import * as ImagePicker from 'expo-image-picker';
+import { Audio } from 'expo-av';
+import EmojiPicker, { en } from 'rn-emoji-keyboard';
 
 // Enable LayoutAnimation for Android
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -23,7 +25,9 @@ interface Message {
     sender: 'me' | 'other';
     time: string;
     type: 'text' | 'image' | 'voice';
-    attachmentUrl?: string;
+    attachmentUrl?: string; // For images
+    audioUri?: string; // For voice
+    duration?: string; // For voice
     status: 'sent' | 'delivered' | 'read';
 }
 
@@ -35,18 +39,142 @@ export default function ChatDetailScreen() {
     const [messages, setMessages] = useState<Message[]>([
         { id: '1', text: 'Hello! How is the maize harvest coming along?', sender: 'other', time: '09:00 AM', type: 'text', status: 'read' },
         { id: '2', text: 'It is going well, thank you. We are expecting a bumper harvest this season.', sender: 'me', time: '09:05 AM', type: 'text', status: 'read' },
-        { id: '3', text: 'That is great news! improved seeds really made a difference.', sender: 'other', time: '09:07 AM', type: 'text', status: 'read' },
     ]);
     const [inputText, setInputText] = useState('');
     const [isTyping, setIsTyping] = useState(false);
     const flatListRef = useRef<FlatList>(null);
 
-    // Auto-scroll on new message
+    // Emoji State
+    const [isEmojiOpen, setIsEmojiOpen] = useState(false);
+
+    // Audio Recording State
+    const [recording, setRecording] = useState<Audio.Recording | null>(null);
+    const [isRecording, setIsRecording] = useState(false);
+    const [recordTime, setRecordTime] = useState(0);
+    const recordTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+    // Audio Playback State
+    const [currentSound, setCurrentSound] = useState<Audio.Sound | null>(null);
+    const [playingMessageId, setPlayingMessageId] = useState<string | null>(null);
+
+
+
+    // Auto-scroll logic
     useEffect(() => {
         setTimeout(() => {
             flatListRef.current?.scrollToEnd({ animated: true });
         }, 100);
-    }, [messages]);
+    }, [messages, isTyping]); // Scroll when messages change or typing starts
+
+    const startRecording = async () => {
+        try {
+            console.log('Requesting permissions..');
+            const permission = await Audio.requestPermissionsAsync();
+            if (permission.status !== 'granted') {
+                Alert.alert("Permission Required", "Please allow microphone access to record voice messages.");
+                return;
+            }
+            await Audio.setAudioModeAsync({
+                allowsRecordingIOS: true,
+                playsInSilentModeIOS: true,
+            });
+            console.log('Starting recording..');
+            const { recording } = await Audio.Recording.createAsync(
+                Audio.RecordingOptionsPresets.HIGH_QUALITY
+            );
+            setRecording(recording);
+            setIsRecording(true);
+            setRecordTime(0);
+            recordTimerRef.current = setInterval(() => {
+                setRecordTime(prev => prev + 1);
+            }, 1000);
+            console.log('Recording started');
+        } catch (err) {
+            console.error('Failed to start recording', err);
+        }
+    };
+
+    const stopRecording = async () => {
+        if (!recording) return;
+        setIsRecording(false);
+        if (recordTimerRef.current) clearInterval(recordTimerRef.current);
+
+        console.log('Stopping recording..');
+        await recording.stopAndUnloadAsync();
+        const uri = recording.getURI();
+        setRecording(null);
+        console.log('Recording stopped and stored at', uri);
+
+        if (uri) {
+            const mins = Math.floor(recordTime / 60);
+            const secs = recordTime % 60;
+            const durationStr = `${mins}:${secs < 10 ? '0' : ''}${secs}`;
+
+            const newMessage: Message = {
+                id: Date.now().toString(),
+                text: 'Voice Message',
+                sender: 'me',
+                time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                type: 'voice',
+                audioUri: uri,
+                duration: durationStr,
+                status: 'sent'
+            };
+            setMessages(prev => [...prev, newMessage]);
+        }
+    };
+
+    const handlePlayAudio = async (uri: string, id: string) => {
+        try {
+            // Stop currently playing sound if any
+            if (currentSound) {
+                await currentSound.unloadAsync();
+                setCurrentSound(null);
+                setPlayingMessageId(null);
+
+                // If clicking the same message, just stop it (toggle off)
+                if (playingMessageId === id) {
+                    return;
+                }
+            }
+
+            console.log('Loading Sound');
+            const { sound } = await Audio.Sound.createAsync(
+                { uri },
+                { shouldPlay: true }
+            );
+            setCurrentSound(sound);
+            setPlayingMessageId(id);
+
+            // Handle playback completion
+            sound.setOnPlaybackStatusUpdate((status) => {
+                if (status.isLoaded && status.didJustFinish) {
+                    setPlayingMessageId(null);
+                    setCurrentSound(null);
+                    sound.unloadAsync(); // Unload when done
+                }
+            });
+
+            console.log('Playing Sound');
+            await sound.playAsync();
+
+        } catch (error) {
+            console.error('Error playing sound', error);
+            Alert.alert("Playback Error", "Could not play audio message.");
+        }
+    };
+
+    const formatRecordTime = (seconds: number) => {
+        const min = Math.floor(seconds / 60);
+        const sec = seconds % 60;
+        return `${min}:${sec < 10 ? '0' : ''}${sec}`;
+    };
+
+    const handleEmojiSelect = (emojiObject: { emoji: string }) => {
+        setInputText(prev => prev + emojiObject.emoji);
+        // Keep picker open or close? Typically keep open for multiple emojis, usually closed on explicit close.
+        // setIsEmojiOpen(false); // Optional
+    };
 
     const sendMessage = () => {
         if (inputText.trim().length === 0) return;
@@ -63,6 +191,7 @@ export default function ChatDetailScreen() {
         LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
         setMessages(prev => [...prev, newMessage]);
         setInputText('');
+        setIsEmojiOpen(false);
 
         // Simulate reply
         setTimeout(() => {
@@ -84,7 +213,6 @@ export default function ChatDetailScreen() {
     };
 
     const handlePickImage = async () => {
-        // Request permissions
         const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
         if (permissionResult.granted === false) {
             Alert.alert("Permission Required", "You need to allow access to your photos to send images.");
@@ -112,6 +240,8 @@ export default function ChatDetailScreen() {
         }
     };
 
+
+
     const renderMessageBubble = ({ item }: { item: Message }) => {
         const isMe = item.sender === 'me';
         return (
@@ -125,10 +255,42 @@ export default function ChatDetailScreen() {
                 <View style={[
                     styles.messageBubble,
                     isMe ? styles.myMessage : styles.otherMessage,
-                    item.type === 'image' && styles.imageBubble
+                    item.type === 'image' && styles.imageBubble,
+                    item.type === 'voice' && styles.voiceBubble
                 ]}>
                     {item.type === 'image' ? (
                         <Image source={{ uri: item.attachmentUrl }} style={styles.messageImage} />
+                    ) : item.type === 'voice' ? (
+                        <View style={styles.voiceContent}>
+                            <TouchableOpacity
+                                style={styles.playButton}
+                                onPress={() => item.audioUri && handlePlayAudio(item.audioUri, item.id)}
+                            >
+                                <Ionicons
+                                    name={playingMessageId === item.id ? "pause" : "play"}
+                                    size={20}
+                                    color={isMe ? COLORS.primary : COLORS.textSecondary}
+                                />
+                            </TouchableOpacity>
+                            <View style={styles.audioWaveform}>
+                                {/* Simulated Waveform */}
+                                {[...Array(6)].map((_, i) => (
+                                    <View
+                                        key={i}
+                                        style={[
+                                            styles.bar,
+                                            {
+                                                height: [10, 16, 8, 20, 12, 6][i],
+                                                backgroundColor: isMe ? 'rgba(255,255,255,0.7)' : COLORS.primary + '80'
+                                            }
+                                        ]}
+                                    />
+                                ))}
+                            </View>
+                            <Text style={[styles.durationText, isMe ? { color: '#fff' } : { color: COLORS.textSecondary }]}>
+                                {item.duration}
+                            </Text>
+                        </View>
                     ) : (
                         <Text style={[styles.messageText, isMe ? styles.myMessageText : styles.otherMessageText]}>
                             {item.text}
@@ -153,9 +315,33 @@ export default function ChatDetailScreen() {
         );
     };
 
+    const handleCall = () => {
+        Alert.alert(
+            'Call',
+            'Calling feature not available for now',
+        );
+    };
+
+    const handleVideoCall = () => {
+        Alert.alert(
+            'Video Call',
+            'Do you want to make a video call?',
+            [
+                {
+                    text: 'Cancel',
+                    onPress: () => console.log('Cancel Pressed'),
+                    style: 'cancel',
+                },
+                {
+                    text: 'Call',
+                    onPress: () => console.log('Call Pressed'),
+                },
+            ],
+        );
+    };
+
     return (
         <SafeAreaView style={styles.container} edges={['top']}>
-            {/* Header */}
             <View style={styles.header}>
                 <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
                     <MaterialIcons name="arrow-back" size={24} color={COLORS.textPrimary} />
@@ -173,16 +359,15 @@ export default function ChatDetailScreen() {
                 </View>
 
                 <View style={styles.headerActions}>
-                    <TouchableOpacity style={styles.actionBtn}>
+                    <TouchableOpacity style={styles.actionBtn} onPress={() => handleCall()}>
                         <Ionicons name="call-outline" size={22} color={COLORS.primary} />
                     </TouchableOpacity>
-                    <TouchableOpacity style={styles.actionBtn}>
+                    <TouchableOpacity style={styles.actionBtn} onPress={() => handleVideoCall()}>
                         <Ionicons name="videocam-outline" size={24} color={COLORS.primary} />
                     </TouchableOpacity>
                 </View>
             </View>
 
-            {/* Chat List */}
             <FlatList
                 ref={flatListRef}
                 data={messages}
@@ -199,43 +384,73 @@ export default function ChatDetailScreen() {
                 }
             />
 
-            {/* Input Bar */}
             <KeyboardAvoidingView
                 behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
                 keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
             >
-                <View style={styles.inputBar}>
-                    <TouchableOpacity style={styles.attachButton} onPress={handlePickImage} activeOpacity={0.7}>
-                        <Ionicons name="add-circle" size={32} color={COLORS.primary} />
-                    </TouchableOpacity>
-
-                    <View style={styles.textInputContainer}>
-                        <TextInput
-                            style={styles.input}
-                            placeholder="Message..."
-                            value={inputText}
-                            onChangeText={setInputText}
-                            multiline
-                            placeholderTextColor={COLORS.textSecondary}
-                        />
-                        <TouchableOpacity onPress={() => { }} style={{ padding: 4 }}>
-                            <MaterialIcons name={"emoji-emotions"} size={24} color={COLORS.textSecondary} />
+                {/* Recording UI Overlay */}
+                {isRecording ? (
+                    <View style={styles.recordingContainer}>
+                        <View style={styles.recordingIndicator}>
+                            <View style={styles.blinkDot} />
+                            <Text style={styles.recordingTimer}>{formatRecordTime(recordTime)}</Text>
+                        </View>
+                        <Text style={styles.recordingText}>Release to send, swipe to cancel</Text>
+                        <TouchableOpacity onPress={stopRecording} style={styles.stopButton}>
+                            <Ionicons name="stop" size={24} color="#fff" />
                         </TouchableOpacity>
                     </View>
+                ) : (
+                    <View style={styles.inputBar}>
+                        <TouchableOpacity style={styles.attachButton} onPress={handlePickImage}>
+                            <Ionicons name="add-circle" size={32} color={COLORS.primary} />
+                        </TouchableOpacity>
 
-                    <TouchableOpacity
-                        style={[styles.sendButton, !inputText.trim() && styles.sendButtonDisabled]}
-                        onPress={sendMessage}
-                        disabled={!inputText.trim()}
-                        activeOpacity={0.8}
-                    >
-                        {inputText.trim() ? (
-                            <Ionicons name="send" size={18} color="#fff" style={{ marginLeft: 2 }} />
-                        ) : (
-                            <MaterialIcons name="mic" size={24} color="#fff" />
-                        )}
-                    </TouchableOpacity>
-                </View>
+                        <View style={styles.textInputContainer}>
+                            <TextInput
+                                style={styles.input}
+                                placeholder="Message..."
+                                value={inputText}
+                                onChangeText={setInputText}
+                                multiline
+                                placeholderTextColor={COLORS.textSecondary}
+                                onFocus={() => setIsEmojiOpen(false)}
+                            />
+                            <TouchableOpacity onPress={() => setIsEmojiOpen(!isEmojiOpen)} style={{ padding: 4 }}>
+                                <MaterialIcons
+                                    name={isEmojiOpen ? "keyboard" : "emoji-emotions"}
+                                    size={24}
+                                    color={isEmojiOpen ? COLORS.primary : COLORS.textSecondary}
+                                />
+                            </TouchableOpacity>
+                        </View>
+
+                        <TouchableOpacity
+                            style={[
+                                styles.sendButton,
+                                (!inputText.trim() && !isRecording) ? styles.micButton : {} // Mic style default
+                            ]}
+                            onPress={inputText.trim() ? sendMessage : startRecording}
+                        // Allow long press for recording in future, click to start for now
+                        >
+                            {inputText.trim() ? (
+                                <Ionicons name="send" size={18} color="#fff" style={{ marginLeft: 2 }} />
+                            ) : (
+                                <MaterialIcons name="mic" size={24} color="#fff" />
+                            )}
+                        </TouchableOpacity>
+                    </View>
+                )}
+
+                {/* Emoji Picker Region */}
+                <EmojiPicker
+                    open={isEmojiOpen}
+                    onClose={() => setIsEmojiOpen(false)}
+                    onEmojiSelected={handleEmojiSelect}
+                    categoryPosition="bottom"
+                    translation={en}
+                    enableSearchBar
+                />
             </KeyboardAvoidingView>
         </SafeAreaView>
     );
@@ -259,7 +474,7 @@ const styles = StyleSheet.create({
         borderRadius: 6, backgroundColor: COLORS.success, borderWidth: 2, borderColor: COLORS.surface
     },
     headerName: { fontSize: 16, fontWeight: '700', color: COLORS.textPrimary },
-    statusText: { fontSize: 11, color: COLORS.success }, // Dynamic based on props later
+    statusText: { fontSize: 11, color: COLORS.success },
     headerActions: { flexDirection: 'row' },
     actionBtn: { padding: 8, marginLeft: 4 },
 
@@ -286,6 +501,16 @@ const styles = StyleSheet.create({
     myMessageText: { color: '#FFFFFF' },
     otherMessageText: { color: COLORS.textPrimary },
 
+    voiceBubble: { width: 180, flexDirection: 'row', alignItems: 'center', paddingVertical: 8 },
+    voiceContent: { flexDirection: 'row', alignItems: 'center', flex: 1 },
+    playButton: {
+        width: 30, height: 30, borderRadius: 15, backgroundColor: '#fff',
+        justifyContent: 'center', alignItems: 'center', marginRight: 10
+    },
+    audioWaveform: { flexDirection: 'row', alignItems: 'center', flex: 1, marginRight: 8, height: 20, justifyContent: 'space-evenly' },
+    bar: { width: 3, backgroundColor: 'rgba(255,255,255,0.7)', borderRadius: 1 },
+    durationText: { fontSize: 12, fontWeight: '500' },
+
     metaContainer: { flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-end', marginTop: 4 },
     timeText: { fontSize: 10 },
     myTimeText: { color: 'rgba(255,255,255,0.7)' },
@@ -309,5 +534,57 @@ const styles = StyleSheet.create({
         width: 44, height: 44, borderRadius: 22, backgroundColor: COLORS.primary,
         justifyContent: 'center', alignItems: 'center', elevation: 2
     },
-    sendButtonDisabled: { backgroundColor: COLORS.secondary }, // Or distinct color
+    micButton: { backgroundColor: COLORS.primary }, // Keep generic or specific color
+
+    // Recording UI
+    recordingContainer: {
+        flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+        paddingHorizontal: wp(4), paddingVertical: hp(1.5), backgroundColor: COLORS.surface,
+        borderTopWidth: 1, borderTopColor: COLORS.border
+    },
+    recordingIndicator: { flexDirection: 'row', alignItems: 'center' },
+    blinkDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: COLORS.error, marginRight: 8 },
+    recordingTimer: { fontSize: 16, fontWeight: '600', color: COLORS.textPrimary },
+    recordingText: { fontSize: 14, color: COLORS.textSecondary },
+    stopButton: { padding: 8, backgroundColor: COLORS.error, borderRadius: 20 },
+    chatBubble: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#007AFF', // iMessage blue
+        padding: 15,
+        borderRadius: 20,
+        borderBottomRightRadius: 2, // Chat bubble tail effect
+        marginBottom: 15,
+        alignSelf: 'flex-end', // Align to right like "sent" messages
+        maxWidth: '80%',
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.2,
+        shadowRadius: 1.41,
+        elevation: 2,
+    },
+    bubbleContent: {
+        flex: 1,
+    },
+    waveformSimulator: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        height: 30,
+        marginBottom: 5,
+    },
+    waveformBar: {
+        width: 3,
+        backgroundColor: '#fff',
+        marginHorizontal: 1,
+        borderRadius: 2,
+    },
+    metaData: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+    },
+    timestampText: {
+        color: 'rgba(255,255,255,0.6)',
+        fontSize: 10,
+        marginLeft: 10,
+    },
 });

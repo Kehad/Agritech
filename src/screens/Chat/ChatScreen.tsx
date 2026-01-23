@@ -1,7 +1,7 @@
-import React from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, TextInput, FlatList } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, TextInput, FlatList, Modal, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { MaterialIcons } from '@expo/vector-icons';
+import { MaterialIcons, Ionicons } from '@expo/vector-icons';
 import { COLORS, hp, wp } from 'components/utils';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
@@ -10,11 +10,26 @@ import { ChatStackParamList } from '../../navigation/ChatNavigator';
 const ChatScreen = () => {
     const navigation = useNavigation<StackNavigationProp<ChatStackParamList>>();
 
+    // States for New Chat
+    const [isNewChatVisible, setIsNewChatVisible] = useState(false);
+
+    const [searchTerm, setSearchTerm] = useState('');
+
+    // States for Main List Search
+    const [mainSearch, setMainSearch] = useState('');
+
     const users = [
         { id: '1', name: 'Dr. Akeem', role: 'Ext. Officer', image: 'https://i.pravatar.cc/100?img=11', active: true },
         { id: '2', name: 'Mama Nkechi', role: 'Supplier', image: 'https://i.pravatar.cc/100?img=5', active: true },
         { id: '3', name: 'Oluwaseun', role: 'Vet', image: 'https://i.pravatar.cc/100?img=3', active: false },
         { id: '4', name: 'Co-op Group', role: 'Community', image: 'https://i.pravatar.cc/100?img=8', active: false },
+    ];
+
+    const availableContacts = [
+        ...users,
+        { id: '5', name: 'John Doe', role: 'Farmer', image: 'https://i.pravatar.cc/100?img=13', active: true },
+        { id: '6', name: 'Sarah Smith', role: 'Buyer', image: 'https://i.pravatar.cc/100?img=9', active: false },
+        { id: '7', name: 'AgroSupport', role: 'Support', image: 'https://ui-avatars.com/api/?name=Agro+Support&background=0D8ABC&color=fff', active: true }
     ];
 
     const messages = [
@@ -61,18 +76,22 @@ const ChatScreen = () => {
     ];
 
     const handleChatPress = (item: any) => {
+        setIsNewChatVisible(false); // Close modal if open
         navigation.navigate('ChatDetail', {
             id: item.id,
             name: item.name,
             image: item.image,
-            active: true // Or derive from users list if possible
+            active: item.active || true
         });
     };
 
     const renderHeader = () => (
         <View style={styles.header}>
             <Text style={styles.headerTitle}>Community</Text>
-            <TouchableOpacity style={styles.iconBtn}>
+            <TouchableOpacity
+                style={styles.iconBtn}
+                onPress={() => setIsNewChatVisible(true)}
+            >
                 <MaterialIcons name="edit" size={24} color={COLORS.primary} />
             </TouchableOpacity>
         </View>
@@ -85,6 +104,8 @@ const ChatScreen = () => {
                 style={styles.searchInput}
                 placeholder="Search messages..."
                 placeholderTextColor={COLORS.textSecondary}
+                value={mainSearch}
+                onChangeText={setMainSearch}
             />
         </View>
     );
@@ -135,13 +156,24 @@ const ChatScreen = () => {
         </TouchableOpacity>
     );
 
+    // New Chat Modal Content
+    const filteredContacts = availableContacts.filter(contact =>
+        contact.name.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+
+    // Main List Filtered Messages
+    const filteredMessages = messages.filter(msg =>
+        msg.name.toLowerCase().includes(mainSearch.toLowerCase()) ||
+        msg.message.toLowerCase().includes(mainSearch.toLowerCase())
+    );
+
     return (
         <SafeAreaView style={styles.container} edges={['top']}>
             {renderHeader()}
 
             <View style={{ flex: 1 }}>
                 <FlatList
-                    data={messages}
+                    data={filteredMessages}
                     keyExtractor={item => item.id}
                     renderItem={renderMessageItem}
 
@@ -156,6 +188,55 @@ const ChatScreen = () => {
                     contentContainerStyle={{ paddingBottom: hp(10) }}
                 />
             </View>
+
+            {/* New Chat Modal */}
+            <Modal
+                animationType="slide"
+                transparent={true}
+                visible={isNewChatVisible}
+                onRequestClose={() => setIsNewChatVisible(false)}
+            >
+                <View style={styles.modalContainer}>
+                    <View style={styles.modalContent}>
+                        <View style={styles.modalHeader}>
+                            <TouchableOpacity onPress={() => setIsNewChatVisible(false)}>
+                                <Text style={styles.cancelText}>Cancel</Text>
+                            </TouchableOpacity>
+                            <Text style={styles.modalTitle}>New Message</Text>
+                            <View style={{ width: 50 }} />
+                        </View>
+
+                        <View style={styles.modalSearch}>
+                            <Text style={styles.toLabel}>To:</Text>
+                            <TextInput
+                                style={styles.modalInput}
+                                placeholder="Search Name or Number"
+                                value={searchTerm}
+                                onChangeText={setSearchTerm}
+                                autoFocus
+                            />
+                        </View>
+
+                        <Text style={styles.modalSectionTitle}>Suggested</Text>
+                        <FlatList
+                            data={filteredContacts}
+                            keyExtractor={item => item.id}
+                            renderItem={({ item }) => (
+                                <TouchableOpacity
+                                    style={styles.contactItem}
+                                    onPress={() => handleChatPress(item)}
+                                >
+                                    <Image source={{ uri: item.image }} style={styles.avatar} />
+                                    <View style={styles.contactInfo}>
+                                        <Text style={styles.contactName}>{item.name}</Text>
+                                        <Text style={styles.contactRole}>{item.role}</Text>
+                                    </View>
+                                </TouchableOpacity>
+                            )}
+                        />
+                    </View>
+                </View>
+            </Modal>
         </SafeAreaView>
     );
 };
@@ -303,6 +384,78 @@ const styles = StyleSheet.create({
         color: '#fff',
         fontSize: 10,
         fontWeight: 'bold',
+    },
+    // Modal Styles
+    modalContainer: {
+        flex: 1,
+        backgroundColor: 'rgba(0,0,0,0.5)',
+        justifyContent: 'flex-end',
+    },
+    modalContent: {
+        backgroundColor: '#fff',
+        borderTopLeftRadius: 20,
+        borderTopRightRadius: 20,
+        height: '90%',
+        paddingTop: 20,
+    },
+    modalHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        paddingHorizontal: 20,
+        marginBottom: 20,
+    },
+    cancelText: {
+        fontSize: 16,
+        color: COLORS.primary,
+    },
+    modalTitle: {
+        fontSize: 18,
+        fontWeight: 'bold',
+    },
+    modalSearch: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 20,
+        borderBottomWidth: 1,
+        borderBottomColor: '#eee',
+        paddingBottom: 15,
+        marginBottom: 15,
+    },
+    toLabel: {
+        fontSize: 16,
+        color: '#999',
+        marginRight: 10,
+    },
+    modalInput: {
+        flex: 1,
+        fontSize: 16,
+    },
+    modalSectionTitle: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: '#666',
+        marginLeft: 20,
+        marginBottom: 10,
+    },
+    contactItem: {
+        flexDirection: 'row',
+        paddingHorizontal: 20,
+        paddingVertical: 12,
+        alignItems: 'center',
+    },
+    contactInfo: {
+        marginLeft: 15,
+        justifyContent: 'center',
+    },
+    contactName: {
+        fontSize: 16,
+        fontWeight: '600',
+        color: '#333',
+    },
+    contactRole: {
+        fontSize: 14,
+        color: '#666',
     },
 });
 
